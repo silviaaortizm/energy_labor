@@ -1,0 +1,38 @@
+SELECT
+  {[Measures].[Número de Cotizantes]} ON COLUMNS,
+
+  NON EMPTY
+    CrossJoin(
+      CrossJoin(
+        CrossJoin(
+          {
+            [Periodo de Cotizacion].[Anno].[Anno].&[2012] :
+            [Periodo de Cotizacion].[Anno].[Anno].&[2025]
+          },
+
+          Except(
+            [Aportantes].[Departamento].[Departamento].Members,
+            {
+              [Aportantes].[Departamento].[Departamento].&[52 - Nariño],
+              [Aportantes].[Departamento].[Departamento].&[85 - Casanare],
+              [Aportantes].[Departamento].[Departamento].&[88 - San Andrés, Providencia y Santa Catalina],
+              [Aportantes].[Departamento].[Departamento].&[91 - Amazonas],
+              [Aportantes].[Departamento].[Departamento].&[94 - Guainía],
+              [Aportantes].[Departamento].[Departamento].&[95 - Guaviare],
+              [Aportantes].[Departamento].[Departamento].&[97 - Vaupés],
+              [Aportantes].[Departamento].[Departamento].&[99 - Vichada]
+            }
+          )
+        ),
+
+        [Aportantes].[Municipio].[Municipio].Members
+      ),
+
+      [Periodo de Cotizacion].[Mes].[Mes].Members
+    ) ON ROWS
+
+FROM [CU_AportesCotizantes]
+
+WHERE (
+  [Sistema Seguridad Social PILA].[Sistema].[Tipo Aporte].&[7]
+)

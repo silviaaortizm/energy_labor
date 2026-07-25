@@ -1,0 +1,20 @@
+SELECT
+  {[Measures].[Número de Cotizantes]} ON COLUMNS,
+
+  NON EMPTY
+    CrossJoin(
+      CrossJoin(
+        CrossJoin(
+          {[Periodo de Cotizacion].[Anno].[Anno].&[2017]},
+          [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].Members
+        ),
+        [Aportantes].[Actividad economica].[Seccion].Members
+      ),
+      [Rangos IBC].[Rango IBC].[Rango IBC].Members
+    ) ON ROWS
+
+FROM [CU_AportesCotizantes]
+
+WHERE (
+  [Sistema Seguridad Social PILA].[Sistema].[Tipo Aporte].&[7]
+)

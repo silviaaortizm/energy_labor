@@ -1,0 +1,55 @@
+SELECT
+  {[Measures].[Número de Cotizantes]} ON COLUMNS,
+
+  NON EMPTY
+    CrossJoin(
+      CrossJoin(
+        CrossJoin(
+          {
+            [Periodo de Cotizacion].[Anno].[Anno].&[2012] :
+            [Periodo de Cotizacion].[Anno].[Anno].&[2025]
+          },
+
+          {
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[99999 - Sin Informacion Amazonas, Guanía, Guaviare, Vaupés Y Vichada],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[-1 - No Definido],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[NR - NO REPORTADO],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[05999 - Sin Informacion - Antioquia],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[08999 - Sin Informacion - Atlantico],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[13999 - Sin Informacion - Bolivar],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[15999 - Sin Informacion - Boyaca],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[17999 - Sin Informacion - Caldas],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[18999 - Sin Informacion - Caqueta],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[19999 - Sin Informacion - Cauca],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[20999 - Sin Informacion - Cesar],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[23999 - Sin Informacion Cordoba],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[25999 - Sin Informacion - Cundinamarca],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[27493 - Nuevo Belén De Bajirá],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[27999 - Sin Informacion Choco],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[41999 - Sin Informacion - Huila],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[44999 - Sin Informacion  - La Guajira],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[47999 - Sin Informacion - Magdalena],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[50999 - Sin Informacion - Meta],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[54999 - Sin Informacion - Norte De Santander],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[63999 - Sin Informacion - Quindio],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[66999 - Sin Informacion - Risaralda],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[68999 - Sin Informacion - Santander],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[70999 - Sin Informacion - Sucre],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[73999 - Sin Informacion - Tolima],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[76999 - Sin Informacion - Valle Del Cauca],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[81999 - Sin Informacion - Arauca],
+            [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[86999 - Sin Informacion - Putumayo]
+          }
+        ),
+
+        [Cotizante].[Geografiia Cotizante].[Municipio].Members
+      ),
+
+      [Periodo de Cotizacion].[Mes].[Mes].Members
+    ) ON ROWS
+
+FROM [CU_AportesCotizantes]
+
+WHERE (
+  [Sistema Seguridad Social PILA].[Sistema].[Tipo Aporte].&[7]
+)

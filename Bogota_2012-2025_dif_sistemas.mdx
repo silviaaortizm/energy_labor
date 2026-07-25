@@ -1,0 +1,24 @@
+SELECT
+  {[Measures].[Número de Cotizantes]} ON COLUMNS,
+
+  NON EMPTY
+    CrossJoin(
+      CrossJoin(
+        {
+          [Periodo de Cotizacion].[Anno].[Anno].&[2012] :
+          [Periodo de Cotizacion].[Anno].[Anno].&[2025]
+        },
+
+        {
+          [Ubicación Laboral].[País - Departamento - Municipio].[Municipio].&[11001 - Bogotá, D.C.]
+        }
+      ),
+
+      [Periodo de Cotizacion].[Mes].[Mes].Members
+    ) ON ROWS
+
+FROM [CU_AportesCotizantes]
+
+WHERE (
+  [Sistema Seguridad Social PILA].[Sistema].[Sistema Seguridad].&[4]
+)
