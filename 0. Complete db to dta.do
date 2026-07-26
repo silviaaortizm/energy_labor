@@ -14,10 +14,10 @@ Output:
 ==================================================*/
 global path "C:\Users\Silvia\OneDrive\Job\BID\Projects\Energia - Paneles Solares"
 
-/*==================================================
-1: Base desagregada por actividad económica. 
-	Año*Municipio*Act_Economica*Mes
-==================================================*/
+*==================================================
+**# 1: Base desagregada por actividad económica. 
+* Año*Municipio*Act_Economica*Mes
+*==================================================
 import excel  "$path/databases/Cotizantes_2012-2025_mensual_actecon_salud.xlsx", firstrow sheet("2012-2016") clear
 tempfile part1
 save `part1', replace
@@ -102,6 +102,11 @@ destring dpto, replace
 labmask dpto, val(dpto_name)
 drop dpto_name
 
+** Limpiando la base
+drop if Año==. & dpto==. & Municipio=="" & Mes==. & ActividadEcon=="" & NúmerodeCotizantes==.
+replace Municipio = "11001 - Bogotá, D.C." if Municipio=="11999 - Bogotá, D.C."
+collapse (sum) NúmerodeCotizantes, by(Año Municipio ActividadEcon Mes dpto)
+
 encode ActividadEcon, gen(ActEconomica)
 drop ActividadEcon
 
@@ -112,9 +117,9 @@ order Year dpto Municipio Mes ActEconomica Cotizantes
 
 save "$path/results/Cotizantes_2012-2025_mensual_actecon_salud.dta", replace
 
-/*==================================================
-2: Base por Año*Municipio*Mes
-==================================================*/
+*==================================================
+**# 2: Base por Año*Municipio*Mes
+*==================================================
 import excel "$path\databases\Cotizantes_2012-2025_mensual_salud.xlsx", firstrow clear
 
 gen mes_num = .
@@ -182,15 +187,17 @@ destring dpto, replace
 labmask dpto, val(dpto_name)
 drop dpto_name
 
+** Limpiando la base
 replace Municipio = "11001 - Bogotá, D.C." if Municipio=="11999 - Bogotá, D.C."
+collapse (sum) Cotizantes, by(Year dpto Municipio Mes)
 
 order Year dpto Municipio Mes Cotizantes
 
 save "$path/results/Cotizantes_2012-2025_mensual_salud.dta", replace
 
-/*==================================================
-3: Base por Año*Municipio*Mes (Municipio del aportante)
-==================================================*/
+*==================================================
+**# 3: Base por Año*Municipio*Mes (Municipio del aportante)
+*==================================================
 import excel "$path\databases\Cotizantes_2012-2025_mensual_salud_v2.xlsx", firstrow clear
 
 gen mes_num = .
@@ -259,8 +266,11 @@ labmask dpto, val(dpto_name)
 drop dpto_name
 drop depto
 
+** Limpiando la base
 replace Municipio = "11001 - Bogotá, D.C." if Municipio=="11999 - Bogotá, D.C."
+
+collapse (sum) Cotizantes, by(Year dpto Municipio Mes)
 
 order Year dpto Municipio Mes Cotizantes
 
-save "$path/results/Cotizantes_2012-2025_mensual_salud_v2.dta", replace
+save "$path/results/Cotizantes_2012-2025_mensual_salud_muniaport.dta", replace
