@@ -403,7 +403,7 @@ forvalues i=1/5 {
 restore
 
 
-
+/*
 /*==================================================
 4: Tasas de crecimiento de cotizantes, por municipio anual
 Usando la base de Cotizantes por: Year*Municipio*Mes
@@ -449,4 +449,4 @@ gen tasa_crecim_anual = (Cotizantes - L.Cotizantes) / L.Cotizantes
 drop Cotizantes
 reshape wide tasa_crecim_anual, i(dpto id_municipio) j(Year)
 
-export excel using "$path\results\Tasascrecim_cotizantes_muni_anual.xlsx", firstrow(variables) replace
+export excel using "$path\results\Tasascrecim_cotizantes_muni_anual.xlsx", firstrow(variables) replace*/
