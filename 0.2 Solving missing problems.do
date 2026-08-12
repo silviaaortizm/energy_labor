@@ -148,7 +148,7 @@ rename Cotizantes_adj Cotizantes
 save "$path/results/Cotizantes_2012-2025_mensual_salud_correctedshares.dta", replace
 
 
-*==================================================
+/*==================================================
 **# Correccion imputando municipios de aportante
 *==================================================
 
@@ -222,7 +222,7 @@ gen dpto2=substr(Municipio,1,2) if orig==0
 	
 collapse (sum) Cotizantes, by(Year dpto Mes Municipio)	
 
-save "$path/results/Cotizantes_2012-2025_mensual_salud_correctedmuni.dta", replace
+save "$path/results/Cotizantes_2012-2025_mensual_salud_correctedmuni.dta", replace*/
 
 
 *=============================================================
@@ -232,7 +232,7 @@ save "$path/results/Cotizantes_2012-2025_mensual_salud_correctedmuni.dta", repla
 *==================================================
 **# Corrección missings agosto 2016-mayo 2019
 *   usando shares de agosto 2015 - julio 2016
-*==================================================
+*==================================================*
 use "$path/results/Cotizantes_2012-2025_mensual_actecon_salud.dta", clear
 
 drop if Year==. & dpto==. & Municipio=="" & Mes==. & ActEconomica==. & Cotizantes==.
@@ -242,13 +242,16 @@ drop if dpto==.
 gen no_info_municipio = substr(Municipio,3,3)=="999"
 replace no_info_municipio = 1 if Municipio=="" | Municipio=="NR - NO REPORTADO"
 
+* Identificar actividad económica sin información
+gen no_info_act = (ActEconomica==15) //ND - NO DEFINIDO  
+
 * Guardar base original desagregada por actividad económica
 tempfile base_act
 save `base_act', replace
 
 
 *--------------------------------------------------
-* 1. Redistribuir missings entre municipios (procedimiento similar a la sección 1 de este do file)
+* 1. Redistribuir missings entre municipios
 *--------------------------------------------------
 * Pasar temporalmente a nivel año-mes-departamento-municipio
 collapse (sum) Cotizantes, by(dpto Year Mes Municipio no_info_municipio)
@@ -275,6 +278,7 @@ restore
 * Llevar los shares del periodo base a los años a corregir
 merge m:1 dpto Mes Municipio using `shares_base', ///
     keep(master match) nogen
+
 drop if dpto==.
 
 * Periodo a corregir: agosto 2016 - mayo 2019
@@ -287,13 +291,10 @@ replace share_muni_base = 0 if share_muni_base==. & periodo_ajuste==1
 
 
 *--------------------------------------------------
-* 1.1. Calcular cuánto missing debe mantenerse
+* 1.1. Calcular cuánto missing de municipio debe mantenerse
 *--------------------------------------------------
 /*
-No se redistribuyen todos los missing: se conserva el nivel histórico observado
-en el periodo base. Por ejemplo, si históricamente 0.1% de los cotizantes del
-departamento no tenía municipio, se mantiene ese 0.1% y solo se redistribuye
-entre los municipios el missing que exceda dicho nivel.
+No se redistribuyen todos los missing de municipio: se conserva el share histórico observado en el periodo base y únicamente se redistribuye el exceso.
 */
 
 * Total actual de cotizantes del departamento
@@ -335,7 +336,8 @@ gen cot_redistribuir = ///
     if periodo_ajuste==1 & no_info_municipio==0
 
 * Extra final asignado a cada municipio:
-* redistribución para municipios identificados y missing conservado para no identificados
+* redistribución para municipios identificados y missing conservado
+* para municipios sin información
 egen extra_cot = rowtotal(cot_redistribuir cot_missing)
 
 
@@ -364,9 +366,25 @@ tempfile extras_cot
 save `extras_cot', replace
 
 
-*--------------------------------------------------
-* 2. Redistribuir los extras entre actividades económicas
-*--------------------------------------------------
+
+*==================================================
+* 2. Redistribuir por actividad económica
+*==================================================
+/*
+En esta segunda etapa no se distribuyen únicamente los extra_cot que vienen de la corrección municipal.
+
+Para los municipios identificados se construye una bolsa compuesta por:
+
+    extra_cot
+        +
+    cotizantes que ya pertenecían al municipio pero cuya
+    actividad económica estaba sin definir.
+
+Los cotizantes originales con actividad económica missing se retiran de su categoría original y toda esta bolsa se redistribuye siguiendo los shares históricos de actividad económica.
+
+La categoría de actividad económica sin información forma parte del share histórico, por lo que se conserva su participación histórica en la redistribución.
+*/
+
 * Volver a la base original desagregada por actividad
 use `base_act', clear
 
@@ -382,28 +400,64 @@ gen periodo_ajuste = ///
 
 
 *--------------------------------------------------
-* 2.1. Calcular shares históricos de actividad por municipio
-*-------------------------------------------------
+* 2.1. Identificar los cotizantes sin actividad económica
+*--------------------------------------------------
+
+* Total de cotizantes con actividad económica sin información
+* dentro de cada municipio
+bysort Year Mes dpto Municipio: egen cot_no_info_act = ///
+    total(cond(no_info_act==1 & periodo_ajuste==1, Cotizantes, 0))
+
+
+*--------------------------------------------------
+* 2.2. Construir bolsa que se distribuirá por actividad
+*--------------------------------------------------
+/*
+Para municipios identificados:
+
+    bolsa_act = extra municipal
+              + cotizantes que ya tenían municipio
+                pero no actividad económica.
+
+Para municipios sin información NO se suma cot_no_info_act porque
+extra_cot ya corresponde a la parte de los missing municipales que
+se decidió conservar. Sumarlos nuevamente implicaría doble conteo.
+*/
+
+gen bolsa_act = extra_cot + cot_no_info_act ///
+    if periodo_ajuste==1 & no_info_municipio==0
+
+replace bolsa_act = extra_cot ///
+    if periodo_ajuste==1 & no_info_municipio==1
+
+
+*--------------------------------------------------
+* 2.3. Calcular shares históricos de actividad por municipio
+*--------------------------------------------------
 preserve
     keep if (Year==2015 & inrange(Mes,8,12)) | ///
             (Year==2016 & inrange(Mes,1,7))
 
     * Total de cotizantes del municipio en cada mes del periodo base
-    bysort dpto Year Mes Municipio: egen total_muni_act_mes = total(Cotizantes)
+    * Incluye actividad económica sin información
+    bysort dpto Year Mes Municipio: egen total_muni_act_mes = ///
+        total(Cotizantes)
 
     * Share de cada actividad dentro del municipio
+    * La actividad missing también conserva su share histórico
     gen share_act_muni = Cotizantes / total_muni_act_mes
 
     keep dpto Mes Municipio ActEconomica share_act_muni
 
     drop if dpto==.
+
     tempfile shares_muni
     save `shares_muni'
 restore
 
 
 *--------------------------------------------------
-* 2.2. Calcular shares históricos de actividad por departamento
+* 2.4. Calcular shares históricos de actividad por departamento
 *--------------------------------------------------
 /*
 Los shares departamentales se utilizan como alternativa cuando no existe
@@ -416,6 +470,7 @@ preserve
             (Year==2016 & inrange(Mes,1,7))
 
     * Agregar cotizantes por departamento y actividad
+    * Incluye actividad económica sin información
     collapse (sum) Cotizantes, by(dpto Year Mes ActEconomica)
 
     * Total de cotizantes del departamento
@@ -427,14 +482,16 @@ preserve
     keep dpto Mes ActEconomica share_act_dpto
 
     drop if dpto==.
+
     tempfile shares_dpto
     save `shares_dpto'
 restore
 
 
 *--------------------------------------------------
-* 2.3. Llevar shares históricos a la base
+* 2.5. Llevar shares históricos a la base
 *--------------------------------------------------
+
 * Share de actividad a nivel municipal
 merge m:1 dpto Mes Municipio ActEconomica using `shares_muni', ///
     keep(master match) gen(merge_share_muni)
@@ -447,29 +504,37 @@ drop if dpto==.
 
 
 *--------------------------------------------------
-* 2.4. Estandarizar shares entre las actividades
+* 2.6. Estandarizar shares entre las actividades
 *      existentes en cada periodo
 *--------------------------------------------------
 /*
 Los shares se renormalizan utilizando únicamente las actividades presentes
-en cada año-mes-municipio. Así, si una actividad existía en el periodo base
-pero no aparece en el periodo a corregir, el 100% del extra se distribuye
-entre las actividades que sí están presentes.
+en cada año-mes-municipio.
+
+La actividad económica missing se trata como una actividad adicional.
+Por tanto, cuando existe en el municipio y tenía participación histórica,
+también recibe una parte de bolsa_act según su share histórico.
 */
 
 * Estandarizar shares municipales
-bysort Year Mes dpto Municipio: egen share_total = total(share_act_muni)
-gen share_act_muni_std = share_act_muni/share_total
+bysort Year Mes dpto Municipio: egen share_total = ///
+    total(share_act_muni)
+
+gen share_act_muni_std = ///
+    share_act_muni / share_total ///
+    if share_total>0
 
 * Comprobar suma de shares municipales estandarizados
-bysort Year Mes dpto Municipio: egen share_total2 = total(share_act_muni_std)
+bysort Year Mes dpto Municipio: egen share_total2 = ///
+    total(share_act_muni_std)
 
 drop share_act_muni share_total
+
 rename (share_act_muni_std share_total2) ///
        (share_act_muni share_act_muni_total)
 
-* Estandarizar shares departamentales según las actividades presentes
-* Renormalizar los shares departamentales entre las actividades
+
+* Estandarizar shares departamentales entre las actividades
 * que efectivamente existen en cada municipio
 bysort Year Mes dpto Municipio: egen share_dpto_muni_total = ///
     total(share_act_dpto)
@@ -480,67 +545,121 @@ gen share_act_dpto_muni = ///
 
 
 *--------------------------------------------------
-* 2.5. Redistribuir los extras entre actividades
+* 2.7. Redistribuir la bolsa entre actividades
 *--------------------------------------------------
+/*
+Antes se distribuía únicamente extra_cot.
+
+Ahora se distribuye bolsa_act:
+
+    bolsa_act = extra_cot + missing de actividad
+
+para los municipios identificados.
+*/
+
 * Usar shares municipales cuando existe información histórica del municipio
 gen cot_redistribuir = ///
-    share_act_muni * extra_cot ///
+    share_act_muni * bolsa_act ///
     if periodo_ajuste==1 & share_act_muni_total>0.99
 
 * Si no existen shares municipales, usar los shares departamentales
 replace cot_redistribuir = ///
-    share_act_dpto_muni * extra_cot ///
+    share_act_dpto_muni * bolsa_act ///
     if periodo_ajuste==1 & share_act_muni_total==0
 
 
 *--------------------------------------------------
-* 2.6. Chequear conservación de los extras por municipio
+* 2.8. Chequear conservación de la bolsa por municipio
 *--------------------------------------------------
 preserve
-    * Sumar el extra repartido entre actividades
-    bysort Year Mes dpto Municipio: egen extra_cot_act = ///
+
+    * Sumar la bolsa repartida entre actividades
+    bysort Year Mes dpto Municipio: egen bolsa_act_distribuida = ///
         total(cot_redistribuir)
 
-    * Una observación por municipio para realizar la comparación
+    * Una observación por municipio
     egen tag_muni = tag(Year Mes dpto Municipio)
 
-    * El extra municipal debe ser igual a la suma del extra por actividades
-    compare extra_cot extra_cot_act ///
+    * Toda la bolsa debe haber sido distribuida
+    assert abs(bolsa_act-bolsa_act_distribuida)<1 ///
         if tag_muni==1 & periodo_ajuste==1
 
-    dis "Pasa el chequeo de que se mantiene la misma cantidad de cotizantes por year*mes*municipio"
+    dis "Pasa el chequeo de que se distribuye toda la bolsa de actividad por year*mes*municipio"
 
-    * Construir temporalmente los cotizantes ajustados
-    clonevar Cotizantes2 = Cotizantes
-    replace Cotizantes2 = 0 if periodo_ajuste==1 & no_info_municipio==1
-
-    egen Cotizantes_adj = rowtotal(Cotizantes2 cot_redistribuir)
-
-    * Comprobar conservación del total a nivel departamento
-    collapse (sum) Cotizantes Cotizantes_adj, by(Year Mes dpto)
-
-    assert abs(Cotizantes-Cotizantes_adj)<1
-    dis "Pasa el chequeo de que se mantiene la misma cantidad de cotizantes por year*mes*dpto"
 restore
 
 
 *--------------------------------------------------
-* 2.7. Construir base final corregida
+* 2.9. Chequear conservación del total departamental
 *--------------------------------------------------
-* Retirar los missing originales durante el periodo corregido
-replace Cotizantes = 0 if periodo_ajuste==1 & no_info_municipio==1
+preserve
 
-* Mantener cotizantes originales y sumar los redistribuidos por actividad
+    clonevar Cotizantes2 = Cotizantes
+
+    /*
+    Retirar:
+    1. Los cotizantes originales cuyo municipio estaba sin información.
+    2. Los cotizantes de municipios identificados cuya actividad estaba
+       sin información.
+
+    Ambos grupos ya están incorporados en bolsa_act.
+    */
+
+    replace Cotizantes2 = 0 ///
+        if periodo_ajuste==1 & no_info_municipio==1
+
+    replace Cotizantes2 = 0 ///
+        if periodo_ajuste==1 & ///
+           no_info_municipio==0 & ///
+           no_info_act==1
+
+    * Agregar nuevamente toda la bolsa distribuida
+    egen Cotizantes_adj = rowtotal(Cotizantes2 cot_redistribuir)
+
+    collapse (sum) Cotizantes Cotizantes_adj, by(Year Mes dpto)
+
+    assert abs(Cotizantes-Cotizantes_adj)<1
+
+    dis "Pasa el chequeo de que se mantiene la misma cantidad de cotizantes por year*mes*dpto"
+
+restore
+
+
+*--------------------------------------------------
+* 2.10. Construir base final corregida
+*--------------------------------------------------
+
+/*
+Retirar de la base original aquello que ya fue incorporado en bolsa_act.
+*/
+
+* Todos los registros originales sin municipio se reemplazan
+* por la parte que quedó después de la corrección municipal
+replace Cotizantes = 0 ///
+    if periodo_ajuste==1 & no_info_municipio==1
+
+* Para municipios identificados, retirar los cotizantes cuya actividad
+* estaba sin definir, ya que ahora forman parte de bolsa_act
+replace Cotizantes = 0 ///
+    if periodo_ajuste==1 & ///
+       no_info_municipio==0 & ///
+       no_info_act==1
+
+* Mantener los cotizantes originales identificados
+* y sumar la bolsa redistribuida
 egen Cotizantes_adj = rowtotal(Cotizantes cot_redistribuir)
 
 
 *--------------------------------------------------
-* 2.8. Guardar base corregida
+* 2.11. Guardar base corregida
 *--------------------------------------------------
 keep Year dpto Municipio Mes ActEconomica Cotizantes_adj
+
 rename Cotizantes_adj Cotizantes
 
 save "$path/results/Cotizantes_2012-2025_mensual_actecon_salud_correctedshares.dta", replace
+
+
 
 /*==================================================
 **# Corrección missings agosto 2016-mayo 2019 
